@@ -1,0 +1,156 @@
+---
+title: "Practical machine learning"
+author: "Rajat Kumar"
+date: "September 30, 2018"
+output: html_document
+---
+#Practical Machine Learning Course project
+
+##Overview
+This project consists of a dataset which has records of people doing different activities and assciated readings which were associated with the activities. In this project data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants are used to train and test different machine learning algorithms and find which one has the highes accuracy. The assignment is divided into following parts:
+
+- Getting and cleaning data
+- Exploratory analysis of data
+- Model building and testing
+- Random Forest
+- Decision Tree
+- Generalized boosted regression
+- Support vector machines (linear and radial)
+  
+###Getting and Cleaning Data
+
+```{r, cache=T}
+# Download part
+train_url <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+test_url <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+if(!file.exists("Module_8_Assignment_1")){dir.create("Module_8_Assignment_1")}
+download.file(train_url, destfile = "./Module_4_Assignment_2/pml-training",method = "curl")
+download.file(test_url, destfile = "./Module_4_Assignment_2/pml-testing",method = "curl")
+pml_training <- read.csv("./Module_4_Assignment_2/pml-training", header = T,na.strings=c("","NA","#DIV0!"))
+pml_testing <- read.csv("./Module_4_Assignment_2/pml-testing", header = T,na.strings=c("","NA","#DIV0!"))
+```
+
+This part removes the NAs and data points like name, timestamp and redundant data points.
+
+```{r, cache=T}
+#Data Exploration
+na_records <-sapply(pml_training, function(x) sum(is.na(x))) ##Finding nas in columns
+without_na <- na_records[na_records == 0] ## taking columns with zero nas
+cols <- names(without_na) ## selecting the column names
+training_full <- pml_training[,cols] ## Passing the column names to the training dataset
+training <- training_full[,-c(1:6)]
+```
+
+Applying the same data transformation to the testing data set
+
+```{r, cache=T}
+#applying the same transformations to testing set
+na_records_test <-sapply(pml_testing, function(x) sum(is.na(x))) ##Finding nas in columns
+without_na_test <- na_records_test[na_records_test == 0] ## taking columns with zero nas
+cols_test <- names(without_na_test) ## selecting the column names
+testing<- pml_testing[,cols_test]
+testing <- testing[,-c(60)]
+##Removing data which has very little signinficance for activity calculation
+testing <- testing[, -c(1:6)]##name and time of records
+```
+
+Dividing the training data set into training and validation dataset
+
+```{r, cache=T}
+## Model buiding
+library(caret)
+train_in <- createDataPartition(training$classe, p= 0.95)[[1]]
+training = training[train_in,]
+validation <- training[-train_in,]
+```
+
+##Exploratory analysis
+Since the predictor variables are 54, it will be difficult to visualise the correlation and other interaction between variables. So, we will just take a look at the various variables and theie class types. Our target variable is "classe" variable.
+
+```{r, cache=T}
+#str(training)
+```
+
+###Model Building
+
+####Random Forest
+
+Random forest doesn't require cross validation as it calculates and adapts on the basis of out of the bag error since it samples with replacement.
+
+```{r, cache=T}
+#Random Forest
+library(randomForest)
+set.seed(12345)
+modFit_rf <- randomForest(classe ~ ., data= training)
+prediction_rf <- predict(modFit_rf, validation[,-54], type = "class")
+cmrf <- confusionMatrix(prediction_rf,validation$classe)
+cmrf
+```
+
+```{r, cache=T}
+plot(modFit_rf)
+```
+
+###Prediction with decision tree
+
+```{r, cache=T}
+#Prediction with Decision Trees
+library(rpart)
+set.seed(111)
+modFit_trees <- train(classe ~ ., data = training, method = "rpart")
+prediction_tress<- predict(modFit_trees, validation[,-54])
+cmdt <- confusionMatrix(prediction_tress, validation$classe)
+cmdt
+```
+
+###Prediction using  gbm
+
+```{r, cache=T}
+#prediction with gbm
+set.seed(111)
+controlGBM <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+modGBM  <- train(classe ~ ., data=training, method = "gbm", trControl = controlGBM, verbose = FALSE)
+modGBM$finalModel
+print(modGBM)
+predictGBM <- predict(modGBM, newdata=validation[,-54])
+cmGBM <- confusionMatrix(predictGBM, validation$classe)
+cmGBM
+```
+
+```{r,cache=T}
+plot(modGBM)
+plot(modGBM, plotType = "level")
+```
+
+###Prediction with support vector machine
+
+```{r, cache= T}
+#prediction with support vector machine
+trctrl <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+set.seed(111)
+
+svm_Linear <- train(classe ~., data = training, method = "svmLinear",
+                    trControl=trctrl,
+                    preProcess = c("center", "scale"),
+                    tuneLength = 10)
+svm_Linear
+validate_pred <- predict(svm_Linear, newdata = validation[,-54])
+cm_svml <- confusionMatrix(validate_pred, validation$classe)
+cm_svml
+svm_Radial <- train(classe ~., data = training, method = "svmRadial",
+                    trControl=trctrl,
+                    preProcess = c("center", "scale"),
+                    tuneLength = 10)
+
+validate_pred_Radial <- predict(svm_Radial, newdata = validation[,-54])
+cm_svmr<-confusionMatrix(validate_pred_Radial, validation$classe)
+cm_svmr
+```
+
+##Conclusion
+Comparing the different accuracies the random forest is the best algorithm to predict the test case with 100% accuracy
+
+```{r,cache=T}
+predictions<- predict(modFit_rf, testing, type = "class")
+predictions
+```
