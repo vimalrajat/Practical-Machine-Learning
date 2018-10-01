@@ -1,4 +1,4 @@
-*#Link for the projcet*
+#Link for the project
 
 http://rpubs.com/RAJAT_KUMAR/prac_ML
 
